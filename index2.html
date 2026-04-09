@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI Playlist Generator</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&family=Cabinet+Grotesk:wght@400;500;700;900&display=swap" rel="stylesheet" />
+  </head>
+  <body>
+
+    <!-- Animated Background Canvas -->
+    <div class="bg-canvas" aria-hidden="true">
+      <div class="orb orb-1"></div>
+      <div class="orb orb-2"></div>
+      <div class="orb orb-3"></div>
+      <div class="grid-overlay"></div>
+      <div class="noise-overlay"></div>
+    </div>
+
+    <!-- Header -->
+    <header class="site-header">
+      <div class="header-inner">
+        <div class="logo-group">
+          <div class="logo-icon">
+            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M9 18V5l12-2v13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <circle cx="6" cy="18" r="3" stroke="currentColor" stroke-width="2"/>
+              <circle cx="18" cy="16" r="3" stroke="currentColor" stroke-width="2"/>
+            </svg>
+          </div>
+          <span class="logo-text">AI Playlist Generator</span>
+        </div>
+
+        <nav class="header-nav">
+          <div id="auth-status" class="auth-status">
+            <div id="user-info" class="user-info hidden">
+              <span class="connected-dot"></span>
+              <span id="user-name" class="user-name-text"></span>
+              <img id="user-avatar" class="user-avatar" src="" alt="Avatar" referrerpolicy="no-referrer" />
+            </div>
+            <button id="connect-btn" class="btn-connect">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/></svg>
+              Connect Spotify
+            </button>
+          </div>
+        </nav>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+
+      <!-- Hero Section -->
+      <section class="hero-section">
+        <div class="hero-eyebrow">
+          <span class="eyebrow-dot"></span>
+          <span class="eyebrow-text">AI-Powered • Spotify Connected</span>
+        </div>
+        <h1 class="hero-title">
+          What's your<br/>
+          <span class="hero-accent">vibe</span> today?
+        </h1>
+        <p class="hero-subtitle">
+          Describe your mood, activity, or a feeling. Our AI interprets your words and curates the perfect Spotify playlist — instantly.
+        </p>
+      </section>
+
+      <!-- Input Section -->
+      <section class="input-section">
+        <form id="mood-form" class="mood-form" autocomplete="off">
+          <div class="input-wrapper">
+            <div class="input-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+              </svg>
+            </div>
+            <input
+              id="mood-input"
+              type="text"
+              class="mood-input"
+              placeholder="e.g. late night drive through Tokyo, rainy jazz study session..."
+              maxlength="200"
+              autocomplete="off"
+              spellcheck="false"
+            />
+            <button type="submit" id="generate-btn" class="btn-generate" disabled>
+              <span class="btn-label">Generate</span>
+              <svg class="btn-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 3l1.9 5.8a2 2 0 0 0 1.3 1.3L21 12l-5.8 1.9a2 2 0 0 0-1.3 1.3L12 21l-1.9-5.8a2 2 0 0 0-1.3-1.3L3 12l5.8-1.9a2 2 0 0 0 1.3-1.3L12 3z"/>
+              </svg>
+              <span class="btn-spinner hidden">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+              </span>
+            </button>
+          </div>
+
+          <!-- Mood Chips -->
+          <div class="mood-chips">
+            <span class="chips-label">Try:</span>
+            <button type="button" class="chip" data-mood="high energy gym pump">🏋️ Gym Pump</button>
+            <button type="button" class="chip" data-mood="cozy rainy day at home">🌧️ Rainy Day</button>
+            <button type="button" class="chip" data-mood="late night coding focus">💻 Focus Mode</button>
+            <button type="button" class="chip" data-mood="summer road trip windows down">🚗 Road Trip</button>
+            <button type="button" class="chip" data-mood="heartbreak and reflection">💔 Heartbreak</button>
+            <button type="button" class="chip" data-mood="sunrise meditation peace">🌅 Meditation</button>
+          </div>
+
+          <!-- Error Message -->
+          <div id="error-msg" class="error-msg hidden">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            <span id="error-text"></span>
+          </div>
+
+          <!-- Not Connected Warning -->
+          <div id="not-connected-msg" class="not-connected-msg">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            Connect your Spotify account to generate playlists
+          </div>
+        </form>
+      </section>
+
+      <!-- Loading State -->
+      <section id="loading-section" class="loading-section hidden">
+        <div class="loading-visual">
+          <div class="loading-ring"></div>
+          <div class="loading-music-icon">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>
+            </svg>
+          </div>
+        </div>
+        <p class="loading-text">Analyzing your vibe...</p>
+        <div class="loading-bars">
+          <div class="bar"></div>
+          <div class="bar"></div>
+          <div class="bar"></div>
+          <div class="bar"></div>
+          <div class="bar"></div>
+        </div>
+      </section>
+
+      <!-- Results Section -->
+      <section id="results-section" class="results-section hidden">
+
+        <!-- AI Interpretation Card -->
+        <div class="interpretation-card">
+          <div class="interp-header">
+            <div class="interp-badge">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3l1.9 5.8a2 2 0 0 0 1.3 1.3L21 12l-5.8 1.9a2 2 0 0 0-1.3 1.3L12 21l-1.9-5.8a2 2 0 0 0-1.3-1.3L3 12l5.8-1.9a2 2 0 0 0 1.3-1.3L12 3z"/></svg>
+              AI Interpretation
+            </div>
+            <div id="fallback-badge" class="fallback-badge hidden">Search Fallback</div>
+          </div>
+
+          <h2 id="interp-mood" class="interp-mood"></h2>
+          <p id="interp-explanation" class="interp-explanation"></p>
+
+          <div class="audio-stats">
+            <div class="stat">
+              <span class="stat-label">Energy</span>
+              <div class="stat-bar-track">
+                <div id="stat-energy" class="stat-bar-fill"></div>
+              </div>
+              <span id="stat-energy-val" class="stat-val"></span>
+            </div>
+            <div class="stat">
+              <span class="stat-label">Valence</span>
+              <div class="stat-bar-track">
+                <div id="stat-valence" class="stat-bar-fill"></div>
+              </div>
+              <span id="stat-valence-val" class="stat-val"></span>
+            </div>
+            <div class="stat">
+              <span class="stat-label">Dance</span>
+              <div class="stat-bar-track">
+                <div id="stat-dance" class="stat-bar-fill"></div>
+              </div>
+              <span id="stat-dance-val" class="stat-val"></span>
+            </div>
+            <div class="stat stat-tempo">
+              <span class="stat-label">Tempo</span>
+              <span id="stat-tempo-val" class="stat-tempo-val"></span>
+              <span class="stat-bpm">BPM</span>
+            </div>
+          </div>
+
+          <div class="interp-actions">
+            <button id="regenerate-btn" class="btn-icon-action" title="Regenerate">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
+              Regenerate
+            </button>
+            <button id="export-btn" class="btn-export">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/><rect x="3" y="19" width="18" height="2" rx="1"/></svg>
+              <span id="export-label">Save to Spotify</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Track Count -->
+        <div class="tracks-header">
+          <span id="track-count" class="track-count"></span>
+          <div class="tracks-divider"></div>
+        </div>
+
+        <!-- Playlist Tracks -->
+        <div id="playlist" class="playlist"></div>
+      </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="site-footer">
+      <p class="footer-text">
+        Powered by <strong>Gemini AI</strong> &amp; <strong>Spotify API</strong>
+      </p>
+
+      <!-- Health Check (dev tool) -->
+      <div id="health-container" class="health-container hidden">
+        <button id="health-btn" class="health-btn">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+          System Health
+        </button>
+        <div id="health-result" class="health-result hidden"></div>
+      </div>
+    </footer>
+
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
