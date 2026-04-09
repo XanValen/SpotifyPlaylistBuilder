@@ -1,0 +1,5 @@
+{
+  "name": "MoodTune",
+  "description": "Generate personalized Spotify playlists based on your mood, activity, or vibe using AI-powered semantic matching.",
+  "requestFramePermissions": []
+}
