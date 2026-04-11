@@ -1,19 +1,20 @@
-import express from "express";
-import { createServer as createViteServer } from "vite";
+import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
-import SpotifyWebApi from "spotify-web-api-node";
-import cookieParser from "cookie-parser";
-import dotenv from "dotenv";
-import axios from "axios";
-import { SPOTIFY_GENRES } from "./src/constants.js";
-
-dotenv.config();
-
-console.log("Starting server with APP_URL:", process.env.APP_URL);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+dotenv.config({ path: path.join(__dirname, '.env') });
+
+import express from "express";
+import { createServer as createViteServer } from "vite";
+import SpotifyWebApi from "spotify-web-api-node";
+import cookieParser from "cookie-parser";
+import axios from "axios";
+import { SPOTIFY_GENRES } from "./src/constants.js";
+
+console.log("Starting server with APP_URL:", process.env.APP_URL);
 
 const app = express();
 const PORT = 3000;
@@ -298,6 +299,20 @@ app.get("/api/auth/me", async (req, res) => {
   }
 });
 
+app.post("/api/auth/logout", (req, res) => {
+  res.clearCookie("spotify_access_token", {
+    httpOnly: true,
+    secure: true,
+    sameSite: "none",
+  });
+  res.clearCookie("spotify_refresh_token", {
+    httpOnly: true,
+    secure: true,
+    sameSite: "none",
+  });
+  res.json({ success: true });
+});
+
 app.post("/api/spotify/recommendations", async (req, res) => {
   try {
     const { mood, seed_genres, target_valence, target_energy, target_tempo, target_danceability } = req.body;
@@ -324,77 +339,47 @@ app.post("/api/spotify/recommendations", async (req, res) => {
 
       const finalSeeds = validSeeds.length > 0 ? validSeeds.slice(0, 5) : ["pop"];
 
-      const options: any = {
-        limit: 20,
-        seed_genres: finalSeeds,
-        market: userCountry
-      };
+      // Spotify's /recommendations endpoint is deprecated for new apps.
+      // Use search-based approach with genre names as queries instead.
+      console.log(`[RECOMMENDATIONS] Using search-based strategy with genres: ${finalSeeds.join(', ')}, market: ${userCountry}`);
 
-      if (typeof target_valence === 'number') options.target_valence = Math.max(0, Math.min(1, target_valence));
-      if (typeof target_energy === 'number') options.target_energy = Math.max(0, Math.min(1, target_energy));
-      if (typeof target_danceability === 'number') options.target_danceability = Math.max(0, Math.min(1, target_danceability));
-      if (typeof target_tempo === 'number' && target_tempo > 0) options.target_tempo = Math.max(40, Math.min(250, Math.round(target_tempo)));
+      const seenIds = new Set<string>();
+      let tracks: any[] = [];
+      let firstSearchError: any = null;
 
-      try {
-        const recs = await spotifyFetch(token, "/recommendations", "GET", options);
-        if (!recs.tracks || recs.tracks.length === 0) {
-          throw { statusCode: 404, message: "No tracks found" };
-        }
-        return recs;
-      } catch (error: any) {
-        console.warn(`Recommendations failed (${error.statusCode}). Attempting recovery...`);
-        
-        // Recovery Step 1: Try without market if it was a 404
-        if (error.statusCode === 404 && options.market) {
-          try {
-            console.log("Retrying recommendations without market parameter...");
-            const { market, ...restOptions } = options;
-            const recs = await spotifyFetch(token, "/recommendations", "GET", restOptions);
-            if (recs.tracks && recs.tracks.length > 0) return recs;
-          } catch (retryError) {
-            console.warn("Retry without market failed.");
-          }
-        }
-
-        // Recovery Step 2: Try with only seeds (no targets) if still failing
-        if (error.statusCode === 404 || error.statusCode === 400) {
-          try {
-            console.log("Retrying recommendations with only seeds...");
-            const minimalOptions = {
-              limit: 20,
-              seed_genres: options.seed_genres.slice(0, 1) // Just one seed
-            };
-            const recs = await spotifyFetch(token, "/recommendations", "GET", minimalOptions);
-            if (recs.tracks && recs.tracks.length > 0) return recs;
-          } catch (retryError) {
-            console.warn("Minimal recommendations failed.");
-          }
-        }
-
-        // Recovery Step 3: Fallback to Search
-        console.log("Falling back to search...");
-        const cleanMood = (mood || "").replace(/[^a-zA-Z0-9 ]/g, " ").trim();
-        const moodKeywords = cleanMood.split(/\s+/).filter(Boolean);
-        const searchQuery = moodKeywords.slice(0, 3).join(" ") || (finalSeeds[0] || "pop");
-        
+      for (const genre of finalSeeds) {
+        if (tracks.length >= 20) break;
         try {
-          const searchResult = await spotifyFetch(token, "/search", "GET", {
-            q: searchQuery,
+          console.log(`[SEARCH] searching for genre: "${genre}"`);
+          const result = await spotifyFetch(token, "/search", "GET", {
+            q: genre,
             type: "track"
-            // Omitting limit to avoid 'Invalid limit' error
           });
-          const tracks = searchResult.tracks?.items || [];
-          
-          return { 
-            tracks: tracks,
-            is_fallback: true,
-            fallback_reason: `Recommendations failed (${error.statusCode}). Search fallback used for: ${searchQuery}`
-          };
-        } catch (searchError: any) {
-          console.error("Search fallback failed as well:", searchError.message);
-          throw error;
+          const items: any[] = result.tracks?.items || [];
+          console.log(`[SEARCH] genre "${genre}" → ${items.length} items`);
+          for (const track of items) {
+            if (!seenIds.has(track.id)) {
+              seenIds.add(track.id);
+              tracks.push(track);
+              if (tracks.length >= 20) break;
+            }
+          }
+        } catch (e: any) {
+          const status = e.statusCode || e.response?.status;
+          const msg = e.message || e.response?.data?.error?.message;
+          console.warn(`[SEARCH] Failed for genre "${genre}": ${status} — ${msg}`);
+          if (!firstSearchError) firstSearchError = { statusCode: status, message: msg };
         }
       }
+
+      if (tracks.length === 0) {
+        const errMsg = firstSearchError
+          ? `Search failed: ${firstSearchError.message} (status ${firstSearchError.statusCode})`
+          : "No tracks found for any genre.";
+        throw { statusCode: firstSearchError?.statusCode || 503, message: errMsg };
+      }
+
+      return { tracks, is_fallback: true };
     });
 
     res.json(result);
