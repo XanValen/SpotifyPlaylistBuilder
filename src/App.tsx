@@ -18,6 +18,7 @@ import { TrendingUp, Search } from "lucide-react";
 import { parseMood, MoodParameters } from "./lib/gemini";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
+import TopoBackground from "./components/TopoBackground";
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -219,12 +220,8 @@ export default function App() {
   }
 
   return (
-    <div className="w-full min-h-screen bg-[#050505] text-white font-sans selection:bg-green-500/30">
-      {/* Atmospheric Background */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
-        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-green-900/20 blur-[120px] rounded-full animate-pulse" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-blue-900/20 blur-[120px] rounded-full animate-pulse delay-700" />
-      </div>
+    <div className="w-full min-h-screen text-white font-sans selection:bg-green-500/30" style={{ backgroundColor: '#080e18' }}>
+      <TopoBackground />
 
       {/* Header */}
       <header className="relative w-full z-10 p-6 flex justify-between items-center border-b border-white/5 backdrop-blur-md bg-black/20">
@@ -293,7 +290,7 @@ export default function App() {
 
       <main className="relative z-10 w-full mx-auto px-4 sm:px-6 flex flex-col items-center" style={{ paddingTop: '40px', paddingBottom: '100px' }}>
         {/* Search Section */}
-        <section className="text-center w-full max-w-2xl mx-auto flex flex-col items-center" style={{ marginBottom: '80px' }}>
+        <section className="text-center w-full max-w-2xl mx-auto flex flex-col items-center rounded-3xl border border-white/5 backdrop-blur-sm" style={{ marginBottom: '80px', background: 'rgba(255,255,255,0.03)', padding: '48px 32px' }}>
           <motion.h2 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -368,11 +365,12 @@ export default function App() {
               <p className="text-white/60 animate-pulse font-mono text-sm tracking-widest uppercase">Analyzing your vibe...</p>
             </motion.div>
           ) : playlist.length > 0 ? (
-            <motion.div 
+            <motion.div
               key="results"
               initial={{ opacity: 0, y: 40 }}
               animate={{ opacity: 1, y: 0 }}
-              className="w-full max-w-4xl space-y-16"
+              className="w-full max-w-4xl space-y-16 rounded-3xl border border-white/5 backdrop-blur-sm"
+              style={{ background: 'rgba(255,255,255,0.03)', padding: '32px' }}
             >
               <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-6 bg-white/5 p-8 rounded-3xl border border-white/10">
                 <div>
@@ -477,7 +475,8 @@ export default function App() {
             initial={{ opacity: 0, y: 40 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
-            className="w-full max-w-4xl mt-24"
+            className="w-full max-w-4xl mt-24 rounded-3xl border border-white/5 backdrop-blur-sm"
+            style={{ background: 'rgba(255,255,255,0.03)', padding: '32px' }}
           >
             <div className="flex items-center gap-3 mb-6">
               <TrendingUp className="w-5 h-5 text-green-500" />
@@ -540,8 +539,8 @@ export default function App() {
             initial={{ opacity: 0, y: 40 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.4 }}
-            className="w-full max-w-4xl mb-8"
-            style={{ marginTop: '80px', paddingTop: '40px', borderTop: '1px solid rgba(255,255,255,0.05)' }}
+            className="w-full max-w-4xl mb-8 rounded-3xl border border-white/5 backdrop-blur-sm"
+            style={{ marginTop: '32px', background: 'rgba(255,255,255,0.03)', padding: '32px' }}
           >
             <div className="flex items-center gap-3 mb-6">
               <Search className="w-5 h-5 text-green-500" />
