@@ -13,7 +13,8 @@ import {
   RefreshCw,
   Info
 } from "lucide-react";
-import { getAuthUrl, getMe, getRecommendations, createPlaylist } from "./lib/spotify";
+import { getAuthUrl, getMe, getRecommendations, createPlaylist, getTrending, searchSongs } from "./lib/spotify";
+import { TrendingUp, Search } from "lucide-react";
 import { parseMood, MoodParameters } from "./lib/gemini";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
@@ -36,6 +37,13 @@ export default function App() {
   const [healthStatus, setHealthStatus] = useState<any>(null);
   const [checkingHealth, setCheckingHealth] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [trendingTracks, setTrendingTracks] = useState<any[]>([]);
+  const [trendingLoading, setTrendingLoading] = useState(false);
+  const [trendingError, setTrendingError] = useState<string | null>(null);
+  const [songQuery, setSongQuery] = useState("");
+  const [songResults, setSongResults] = useState<any[]>([]);
+  const [songSearching, setSongSearching] = useState(false);
+  const [songSearchError, setSongSearchError] = useState<string | null>(null);
 
   useEffect(() => {
     checkAuth();
@@ -68,6 +76,7 @@ export default function App() {
       const data = await getMe();
       if (data.authenticated) {
         setUser(data.user);
+        fetchTrending();
       } else {
         setUser(null);
       }
@@ -76,6 +85,36 @@ export default function App() {
       setUser(null);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleSongSearch(e: React.SyntheticEvent) {
+    e.preventDefault();
+    if (!songQuery.trim()) return;
+    setSongSearching(true);
+    setSongSearchError(null);
+    setSongResults([]);
+    try {
+      const data = await searchSongs(songQuery);
+      setSongResults(data.tracks || []);
+    } catch (error: any) {
+      setSongSearchError(error?.response?.data?.message || error?.message || "Search failed");
+    } finally {
+      setSongSearching(false);
+    }
+  }
+
+  async function fetchTrending() {
+    setTrendingLoading(true);
+    setTrendingError(null);
+    try {
+      const data = await getTrending();
+      setTrendingTracks(data.tracks || []);
+    } catch (error: any) {
+      console.error("Failed to fetch trending", error);
+      setTrendingError(error?.response?.data?.message || error?.message || "Failed to load trending tracks");
+    } finally {
+      setTrendingLoading(false);
     }
   }
 
@@ -98,7 +137,7 @@ export default function App() {
     }
   }
 
-  async function handleGenerate(e?: React.FormEvent) {
+  async function handleGenerate(e?: React.SyntheticEvent) {
     if (e) e.preventDefault();
     if (!mood.trim()) return;
     if (!user) {
@@ -431,6 +470,147 @@ export default function App() {
             </motion.div>
           ) : null}
         </AnimatePresence>
+
+        {/* Trending Section */}
+        {user && (
+          <motion.section
+            initial={{ opacity: 0, y: 40 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+            className="w-full max-w-4xl mt-24"
+          >
+            <div className="flex items-center gap-3 mb-6">
+              <TrendingUp className="w-5 h-5 text-green-500" />
+              <h2 className="text-xl font-bold tracking-tight">Trending This Week</h2>
+              <span className="text-[10px] uppercase tracking-widest text-white/30 font-mono ml-1">Global Top 50</span>
+            </div>
+
+            {trendingLoading ? (
+              <div className="flex items-center justify-center py-16">
+                <Loader2 className="w-6 h-6 text-green-500 animate-spin" />
+              </div>
+            ) : trendingError ? (
+              <p className="text-white/30 text-sm py-8 text-center">{trendingError}</p>
+            ) : trendingTracks.length === 0 ? (
+              <p className="text-white/30 text-sm py-8 text-center">No trending tracks available.</p>
+            ) : (
+              <div className="grid gap-2">
+                {trendingTracks.map((track, i) => (
+                  <div
+                    key={track.id}
+                    className="group flex items-center gap-4 p-3 rounded-xl hover:bg-white/5 transition-colors border border-transparent hover:border-white/5"
+                  >
+                    <span className="w-6 text-center text-white/20 font-mono text-sm flex-shrink-0">{i + 1}</span>
+                    <div className="relative w-10 h-10 flex-shrink-0">
+                      <img
+                        src={track.album.images[0]?.url}
+                        alt={track.name}
+                        className="w-full h-full object-cover rounded-md"
+                        referrerPolicy="no-referrer"
+                      />
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity rounded-md">
+                        <Play className="w-4 h-4 fill-white" />
+                      </div>
+                    </div>
+                    <div className="flex-grow min-w-0">
+                      <p className="font-semibold truncate group-hover:text-green-500 transition-colors text-sm">{track.name}</p>
+                      <p className="text-xs text-white/40 truncate">{track.artists.map((a: any) => a.name).join(", ")}</p>
+                    </div>
+                    <div className="hidden sm:block text-white/20 font-mono text-xs">
+                      {Math.floor(track.duration_ms / 60000)}:{String(Math.floor((track.duration_ms % 60000) / 1000)).padStart(2, '0')}
+                    </div>
+                    <a
+                      href={track.external_urls.spotify}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-2 text-white/20 hover:text-white transition-colors"
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                    </a>
+                  </div>
+                ))}
+              </div>
+            )}
+          </motion.section>
+        )}
+
+        {/* Song Search Section */}
+        {user && (
+          <motion.section
+            initial={{ opacity: 0, y: 40 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4 }}
+            className="w-full max-w-4xl mb-8"
+            style={{ marginTop: '80px', paddingTop: '40px', borderTop: '1px solid rgba(255,255,255,0.05)' }}
+          >
+            <div className="flex items-center gap-3 mb-6">
+              <Search className="w-5 h-5 text-green-500" />
+              <h2 className="text-xl font-bold tracking-tight">Search Songs</h2>
+            </div>
+
+            <form onSubmit={handleSongSearch} className="flex gap-3 mb-6">
+              <input
+                type="text"
+                value={songQuery}
+                onChange={(e) => setSongQuery(e.target.value)}
+                placeholder="Search for a song or artist..."
+                className="flex-grow bg-white/5 border border-white/10 rounded-xl px-5 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-500/50 transition-all placeholder:text-white/20"
+              />
+              <button
+                type="submit"
+                disabled={songSearching}
+                className="px-6 py-3 bg-green-500 text-black font-bold rounded-xl hover:bg-green-400 transition-colors disabled:opacity-50 flex items-center gap-2"
+              >
+                {songSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                Search
+              </button>
+            </form>
+
+            {songSearchError && (
+              <p className="text-red-400 text-sm mb-4 flex items-center gap-2">
+                <Info className="w-4 h-4" /> {songSearchError}
+              </p>
+            )}
+
+            {songResults.length > 0 && (
+              <div className="grid gap-2">
+                {songResults.map((track) => (
+                  <div
+                    key={track.id}
+                    className="group flex items-center gap-4 p-3 rounded-xl hover:bg-white/5 transition-colors border border-transparent hover:border-white/5"
+                  >
+                    <div className="relative w-10 h-10 flex-shrink-0">
+                      <img
+                        src={track.album.images[0]?.url}
+                        alt={track.name}
+                        className="w-full h-full object-cover rounded-md"
+                        referrerPolicy="no-referrer"
+                      />
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity rounded-md">
+                        <Play className="w-4 h-4 fill-white" />
+                      </div>
+                    </div>
+                    <div className="flex-grow min-w-0">
+                      <p className="font-semibold truncate group-hover:text-green-500 transition-colors text-sm">{track.name}</p>
+                      <p className="text-xs text-white/40 truncate">{track.artists.map((a: any) => a.name).join(", ")}</p>
+                    </div>
+                    <div className="hidden sm:block text-white/20 font-mono text-xs flex-shrink-0">
+                      {Math.floor(track.duration_ms / 60000)}:{String(Math.floor((track.duration_ms % 60000) / 1000)).padStart(2, '0')}
+                    </div>
+                    <a
+                      href={track.external_urls.spotify}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-2 text-white/20 hover:text-white transition-colors"
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                    </a>
+                  </div>
+                ))}
+              </div>
+            )}
+          </motion.section>
+        )}
       </main>
 
       {/* Footer */}

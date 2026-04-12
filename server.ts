@@ -23,7 +23,7 @@ app.use(express.json());
 app.use(cookieParser());
 
 // Request logging middleware
-app.use((req, res, next) => {
+app.use((req, _res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
   next();
 });
@@ -234,7 +234,7 @@ app.get("/api/spotify/health", async (req, res) => {
   }
 });
 
-app.get("/api/auth/url", (req, res) => {
+app.get("/api/auth/url", (_req, res) => {
   const scopes = [
     "user-read-private",
     "user-read-email",
@@ -299,7 +299,7 @@ app.get("/api/auth/me", async (req, res) => {
   }
 });
 
-app.post("/api/auth/logout", (req, res) => {
+app.post("/api/auth/logout", (_req, res) => {
   res.clearCookie("spotify_access_token", {
     httpOnly: true,
     secure: true,
@@ -315,7 +315,7 @@ app.post("/api/auth/logout", (req, res) => {
 
 app.post("/api/spotify/recommendations", async (req, res) => {
   try {
-    const { mood, seed_genres, target_valence, target_energy, target_tempo, target_danceability } = req.body;
+    const { seed_genres } = req.body;
 
     const result = await spotifyRequest(req, res, async (token) => {
       // Get user info for market
@@ -352,7 +352,7 @@ app.post("/api/spotify/recommendations", async (req, res) => {
         try {
           console.log(`[SEARCH] searching for genre: "${genre}"`);
           const result = await spotifyFetch(token, "/search", "GET", {
-            q: genre,
+            q: `genre:${genre}`,
             type: "track"
           });
           const items: any[] = result.tracks?.items || [];
@@ -423,6 +423,47 @@ app.post("/api/spotify/create-playlist", async (req, res) => {
   }
 });
 
+app.get("/api/spotify/trending", async (req, res) => {
+  try {
+    const result = await spotifyRequest(req, res, async (token) => {
+      const data = await spotifyFetch(token, "/search", "GET", {
+        q: "genre:pop",
+        type: "track"
+      });
+      console.log("[TRENDING] search result keys:", Object.keys(data));
+      console.log("[TRENDING] tracks count:", data.tracks?.items?.length);
+      const tracks = (data.tracks?.items || []).slice(0, 10);
+      return { tracks };
+    });
+    res.json(result);
+  } catch (error: any) {
+    console.error("[TRENDING] Error:", error.message);
+    res.status(error.statusCode || 500).json({
+      error: "Failed to fetch trending",
+      message: error.message || "An unknown error occurred"
+    });
+  }
+});
+
+app.get("/api/spotify/search-songs", async (req, res) => {
+  const query = req.query.q as string;
+  if (!query?.trim()) return res.status(400).json({ message: "Query is required" });
+
+  try {
+    const result = await spotifyRequest(req, res, async (token) => {
+      const data = await spotifyFetch(token, "/search", "GET", {
+        q: query,
+        type: "track"
+      });
+      const tracks = (data.tracks?.items || []).slice(0, 10);
+      return { tracks };
+    });
+    res.json(result);
+  } catch (error: any) {
+    res.status(error.statusCode || 500).json({ message: error.message || "Search failed" });
+  }
+});
+
 // 404 handler for API routes
 app.all("/api/*", (req, res) => {
   console.warn(`[404] API route not found: ${req.method} ${req.url}`);
@@ -440,7 +481,7 @@ async function startServer() {
   } else {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
-    app.get("*", (req, res) => {
+    app.get("*", (_req, res) => {
       res.sendFile(path.join(distPath, "index.html"));
     });
   }

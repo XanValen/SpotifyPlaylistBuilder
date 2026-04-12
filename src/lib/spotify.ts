@@ -19,3 +19,13 @@ export async function createPlaylist(name: string, uris: string[]) {
   const { data } = await axios.post("/api/spotify/create-playlist", { name, uris });
   return data;
 }
+
+export async function getTrending() {
+  const { data } = await axios.get("/api/spotify/trending");
+  return data;
+}
+
+export async function searchSongs(query: string) {
+  const { data } = await axios.get("/api/spotify/search-songs", { params: { q: query } });
+  return data;
+}
