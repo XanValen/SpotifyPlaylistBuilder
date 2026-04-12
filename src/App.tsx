@@ -186,13 +186,24 @@ export default function App() {
   async function handleExport() {
     if (!playlist.length) return;
     setExporting(true);
+    setError(null);
     try {
-      const uris = playlist.map(t => t.uri);
+      const uris = playlist.map((t: any) => t.uri).filter((u: any) => typeof u === 'string' && u.startsWith('spotify:'));
+      if (uris.length === 0) {
+        setError("No valid track URIs found. Try regenerating the playlist.");
+        return;
+      }
       const name = `MoodTune: ${mood.charAt(0).toUpperCase() + mood.slice(1)}`;
       await createPlaylist(name, uris);
       setExported(true);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Export failed", error);
+      const msg = error?.response?.data?.message || error?.message || "";
+      if (msg.toLowerCase().includes("forbidden") || error?.response?.status === 403) {
+        setError("Spotify blocked saving tracks (app quota restriction). Open each track in Spotify using the links below.");
+      } else {
+        setError(msg || "Failed to save playlist. Please try again.");
+      }
     } finally {
       setExporting(false);
     }
