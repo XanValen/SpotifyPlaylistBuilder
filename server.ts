@@ -1,19 +1,20 @@
-import express from "express";
-import { createServer as createViteServer } from "vite";
+import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
-import SpotifyWebApi from "spotify-web-api-node";
-import cookieParser from "cookie-parser";
-import dotenv from "dotenv";
-import axios from "axios";
-import { SPOTIFY_GENRES } from "./src/constants.js";
-
-dotenv.config();
-
-console.log("Starting server with APP_URL:", process.env.APP_URL);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+dotenv.config({ path: path.join(__dirname, '.env') });
+
+import express from "express";
+import { createServer as createViteServer } from "vite";
+import SpotifyWebApi from "spotify-web-api-node";
+import cookieParser from "cookie-parser";
+import axios from "axios";
+import { SPOTIFY_GENRES } from "./src/constants.js";
+
+console.log("Starting server with APP_URL:", process.env.APP_URL);
 
 const app = express();
 const PORT = 3000;
@@ -22,7 +23,7 @@ app.use(express.json());
 app.use(cookieParser());
 
 // Request logging middleware
-app.use((req, res, next) => {
+app.use((req, _res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
   next();
 });
@@ -233,7 +234,7 @@ app.get("/api/spotify/health", async (req, res) => {
   }
 });
 
-app.get("/api/auth/url", (req, res) => {
+app.get("/api/auth/url", (_req, res) => {
   const scopes = [
     "user-read-private",
     "user-read-email",
@@ -241,7 +242,7 @@ app.get("/api/auth/url", (req, res) => {
     "playlist-modify-private",
     "user-top-read",
   ];
-  const authorizeURL = spotifyApi.createAuthorizeURL(scopes, "state");
+  const authorizeURL = spotifyApi.createAuthorizeURL(scopes, "state", true);
   res.json({ url: authorizeURL });
 });
 
@@ -298,9 +299,23 @@ app.get("/api/auth/me", async (req, res) => {
   }
 });
 
+app.post("/api/auth/logout", (_req, res) => {
+  res.clearCookie("spotify_access_token", {
+    httpOnly: true,
+    secure: true,
+    sameSite: "none",
+  });
+  res.clearCookie("spotify_refresh_token", {
+    httpOnly: true,
+    secure: true,
+    sameSite: "none",
+  });
+  res.json({ success: true });
+});
+
 app.post("/api/spotify/recommendations", async (req, res) => {
   try {
-    const { mood, seed_genres, target_valence, target_energy, target_tempo, target_danceability } = req.body;
+    const { seed_genres } = req.body;
 
     const result = await spotifyRequest(req, res, async (token) => {
       // Get user info for market
@@ -324,77 +339,47 @@ app.post("/api/spotify/recommendations", async (req, res) => {
 
       const finalSeeds = validSeeds.length > 0 ? validSeeds.slice(0, 5) : ["pop"];
 
-      const options: any = {
-        limit: 20,
-        seed_genres: finalSeeds,
-        market: userCountry
-      };
+      // Spotify's /recommendations endpoint is deprecated for new apps.
+      // Use search-based approach with genre names as queries instead.
+      console.log(`[RECOMMENDATIONS] Using search-based strategy with genres: ${finalSeeds.join(', ')}, market: ${userCountry}`);
 
-      if (typeof target_valence === 'number') options.target_valence = Math.max(0, Math.min(1, target_valence));
-      if (typeof target_energy === 'number') options.target_energy = Math.max(0, Math.min(1, target_energy));
-      if (typeof target_danceability === 'number') options.target_danceability = Math.max(0, Math.min(1, target_danceability));
-      if (typeof target_tempo === 'number' && target_tempo > 0) options.target_tempo = Math.max(40, Math.min(250, Math.round(target_tempo)));
+      const seenIds = new Set<string>();
+      let tracks: any[] = [];
+      let firstSearchError: any = null;
 
-      try {
-        const recs = await spotifyFetch(token, "/recommendations", "GET", options);
-        if (!recs.tracks || recs.tracks.length === 0) {
-          throw { statusCode: 404, message: "No tracks found" };
-        }
-        return recs;
-      } catch (error: any) {
-        console.warn(`Recommendations failed (${error.statusCode}). Attempting recovery...`);
-        
-        // Recovery Step 1: Try without market if it was a 404
-        if (error.statusCode === 404 && options.market) {
-          try {
-            console.log("Retrying recommendations without market parameter...");
-            const { market, ...restOptions } = options;
-            const recs = await spotifyFetch(token, "/recommendations", "GET", restOptions);
-            if (recs.tracks && recs.tracks.length > 0) return recs;
-          } catch (retryError) {
-            console.warn("Retry without market failed.");
-          }
-        }
-
-        // Recovery Step 2: Try with only seeds (no targets) if still failing
-        if (error.statusCode === 404 || error.statusCode === 400) {
-          try {
-            console.log("Retrying recommendations with only seeds...");
-            const minimalOptions = {
-              limit: 20,
-              seed_genres: options.seed_genres.slice(0, 1) // Just one seed
-            };
-            const recs = await spotifyFetch(token, "/recommendations", "GET", minimalOptions);
-            if (recs.tracks && recs.tracks.length > 0) return recs;
-          } catch (retryError) {
-            console.warn("Minimal recommendations failed.");
-          }
-        }
-
-        // Recovery Step 3: Fallback to Search
-        console.log("Falling back to search...");
-        const cleanMood = (mood || "").replace(/[^a-zA-Z0-9 ]/g, " ").trim();
-        const moodKeywords = cleanMood.split(/\s+/).filter(Boolean);
-        const searchQuery = moodKeywords.slice(0, 3).join(" ") || (finalSeeds[0] || "pop");
-        
+      for (const genre of finalSeeds) {
+        if (tracks.length >= 20) break;
         try {
-          const searchResult = await spotifyFetch(token, "/search", "GET", {
-            q: searchQuery,
+          console.log(`[SEARCH] searching for genre: "${genre}"`);
+          const result = await spotifyFetch(token, "/search", "GET", {
+            q: `genre:${genre}`,
             type: "track"
-            // Omitting limit to avoid 'Invalid limit' error
           });
-          const tracks = searchResult.tracks?.items || [];
-          
-          return { 
-            tracks: tracks,
-            is_fallback: true,
-            fallback_reason: `Recommendations failed (${error.statusCode}). Search fallback used for: ${searchQuery}`
-          };
-        } catch (searchError: any) {
-          console.error("Search fallback failed as well:", searchError.message);
-          throw error;
+          const items: any[] = result.tracks?.items || [];
+          console.log(`[SEARCH] genre "${genre}" → ${items.length} items`);
+          for (const track of items) {
+            if (!seenIds.has(track.id)) {
+              seenIds.add(track.id);
+              tracks.push(track);
+              if (tracks.length >= 20) break;
+            }
+          }
+        } catch (e: any) {
+          const status = e.statusCode || e.response?.status;
+          const msg = e.message || e.response?.data?.error?.message;
+          console.warn(`[SEARCH] Failed for genre "${genre}": ${status} — ${msg}`);
+          if (!firstSearchError) firstSearchError = { statusCode: status, message: msg };
         }
       }
+
+      if (tracks.length === 0) {
+        const errMsg = firstSearchError
+          ? `Search failed: ${firstSearchError.message} (status ${firstSearchError.statusCode})`
+          : "No tracks found for any genre.";
+        throw { statusCode: firstSearchError?.statusCode || 503, message: errMsg };
+      }
+
+      return { tracks, is_fallback: true };
     });
 
     res.json(result);
@@ -415,17 +400,60 @@ app.post("/api/spotify/create-playlist", async (req, res) => {
       if (!uris || !Array.isArray(uris) || uris.length === 0) {
         throw { statusCode: 400, message: "No tracks provided" };
       }
-      
-      // Use /me/playlists for better compatibility and fewer 403s
+
+      const validUris = uris.filter((u: any) => typeof u === 'string' && u.startsWith('spotify:track:'));
+      console.log(`[CREATE PLAYLIST] "${name}" — ${validUris.length}/${uris.length} valid URIs`);
+
+      if (validUris.length === 0) {
+        throw { statusCode: 400, message: "No valid Spotify track URIs provided" };
+      }
+
       const playlist = await spotifyFetch(token, "/me/playlists", "POST", {
         name,
-        public: false
+        public: true,
+        description: "Generated by MoodTune"
       });
-      
-      await spotifyFetch(token, `/playlists/${playlist.id}/tracks`, "POST", {
-        uris
-      });
-      
+
+      if (!playlist?.id) {
+        throw { statusCode: 500, message: "Playlist was created but returned no ID" };
+      }
+
+      console.log(`[CREATE PLAYLIST] Created playlist ${playlist.id}, now adding ${validUris.length} tracks...`);
+      console.log(`[CREATE PLAYLIST] Sample URIs:`, validUris.slice(0, 3));
+      console.log(`[CREATE PLAYLIST] Token preview: ${token.substring(0, 20)}...`);
+
+      // Scope diagnostic: test if playlist-modify-public is actually in the token
+      try {
+        await axios.put(
+          `https://api.spotify.com/v1/playlists/${playlist.id}`,
+          { description: "Generated by MoodTune" },
+          { headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' } }
+        );
+        console.log('[SCOPE TEST] PUT /playlists OK — playlist-modify-public scope is present');
+      } catch (scopeErr: any) {
+        console.error('[SCOPE TEST] PUT /playlists FAILED:', scopeErr.response?.status, JSON.stringify(scopeErr.response?.data));
+        console.error('[SCOPE TEST] playlist-modify-public scope appears to be MISSING from token');
+      }
+
+      try {
+        const addResponse = await axios({
+          method: 'POST',
+          url: `https://api.spotify.com/v1/playlists/${playlist.id}/tracks`,
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          data: { uris: validUris },
+          timeout: 20000
+        });
+        console.log(`[CREATE PLAYLIST] Tracks added successfully:`, addResponse.data);
+      } catch (addErr: any) {
+        console.error('[ADD TRACKS] Status:', addErr.response?.status);
+        console.error('[ADD TRACKS] Body:', JSON.stringify(addErr.response?.data));
+        console.error('[ADD TRACKS] Headers:', JSON.stringify(addErr.response?.headers));
+        throw { statusCode: addErr.response?.status || 500, message: addErr.response?.data?.error?.message || 'Failed to add tracks' };
+      }
+
       return playlist;
     });
     res.json(result);
@@ -435,6 +463,47 @@ app.post("/api/spotify/create-playlist", async (req, res) => {
       message: error.message || "An unknown error occurred",
       details: error.body?.error?.message || error.message
     });
+  }
+});
+
+app.get("/api/spotify/trending", async (req, res) => {
+  try {
+    const result = await spotifyRequest(req, res, async (token) => {
+      const data = await spotifyFetch(token, "/search", "GET", {
+        q: "genre:pop",
+        type: "track"
+      });
+      console.log("[TRENDING] search result keys:", Object.keys(data));
+      console.log("[TRENDING] tracks count:", data.tracks?.items?.length);
+      const tracks = (data.tracks?.items || []).slice(0, 10);
+      return { tracks };
+    });
+    res.json(result);
+  } catch (error: any) {
+    console.error("[TRENDING] Error:", error.message);
+    res.status(error.statusCode || 500).json({
+      error: "Failed to fetch trending",
+      message: error.message || "An unknown error occurred"
+    });
+  }
+});
+
+app.get("/api/spotify/search-songs", async (req, res) => {
+  const query = req.query.q as string;
+  if (!query?.trim()) return res.status(400).json({ message: "Query is required" });
+
+  try {
+    const result = await spotifyRequest(req, res, async (token) => {
+      const data = await spotifyFetch(token, "/search", "GET", {
+        q: query,
+        type: "track"
+      });
+      const tracks = (data.tracks?.items || []).slice(0, 10);
+      return { tracks };
+    });
+    res.json(result);
+  } catch (error: any) {
+    res.status(error.statusCode || 500).json({ message: error.message || "Search failed" });
   }
 });
 
@@ -455,7 +524,7 @@ async function startServer() {
   } else {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
-    app.get("*", (req, res) => {
+    app.get("*", (_req, res) => {
       res.sendFile(path.join(distPath, "index.html"));
     });
   }

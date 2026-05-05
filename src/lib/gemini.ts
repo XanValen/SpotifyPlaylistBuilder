@@ -21,14 +21,25 @@ export async function parseMood(mood: string): Promise<MoodParameters> {
     model: "gemini-3-flash-preview",
     contents: `Translate the following mood/activity/vibe into Spotify recommendation parameters: "${mood}"`,
     config: {
-      systemInstruction: `You are a music expert. Map user moods to Spotify audio features.
-      - valence: 0.0 to 1.0 (positivity)
-      - energy: 0.0 to 1.0 (intensity)
-      - tempo: 40 to 200 (BPM)
-      - danceability: 0.0 to 1.0
-      - seed_genres: Choose up to 3 relevant Spotify genres from the provided list. ONLY use genres from this list.
-      
-      Genre List: acoustic, afrobeat, alt-rock, alternative, ambient, anime, black-metal, bluegrass, blues, bossanova, brazil, breakbeat, british, cantopop, chicago-house, children, chill, classical, club, comedy, country, dance, dancehall, death-metal, deep-house, detroit-techno, disco, disney, drum-and-bass, dub, dubstep, edm, electro, electronic, emo, folk, forro, french, funk, garage, german, gospel, goth, grindcore, groove, grunge, guitar, happy, hard-rock, hardcore, hardstyle, heavy-metal, hip-hop, holidays, honky-tonk, house, idm, indian, indie, indie-pop, industrial, iranian, j-dance, j-idol, j-pop, j-rock, jazz, k-pop, kids, latin, latino, malay, mandopop, metal, metal-misc, metalcore, minimal-techno, movies, mpb, new-age, new-release, opera, pagode, party, philippines, piano, pop, pop-film, post-dubstep, power-pop, progressive-house, psych-rock, punk, punk-rock, r-n-b, rainy-day, reggae, reggaeton, road-trip, rock, rock-n-roll, rockabilly, romance, sad, salsa, samba, sertanejo, show-tunes, singer-songwriter, ska, sleep, songwriter, soul, soundtracks, spanish, study, summer, swedish, synth-pop, tango, techno, trance, trip-hop, turkish, work-out, world-music.`,
+      systemInstruction: `You are a music expert. Map user moods and activities to Spotify audio features.
+
+Audio Feature Ranges:
+- valence: 0.0 to 1.0 (positivity/happiness - use high values for upbeat moods)
+- energy: 0.0 to 1.0 (intensity - use high values for workout/party moods, low for relaxing moods)
+- tempo: 40 to 200 (BPM - use high values for gym/workout/party, low for calming)
+- danceability: 0.0 to 1.0 (how suitable for dancing)
+
+Activity Examples:
+- Workout/Gym: high energy (0.8+), high tempo (140+), high valence (0.7+), genres: edm, hip-hop, electronic, rock, hardcore
+- Chill/Relaxing: low energy (0.3-), low tempo (80-), high valence (0.6+), genres: ambient, chill, acoustic, indie, soul
+- Party: high energy (0.85+), high tempo (130+), high danceability (0.8+), genres: dance, edm, house, pop, disco
+- Sad/Melancholic: low valence (0.3-), medium-low energy (0.4-), slower tempo (90-), genres: sad, ambient, soul, indie, acoustic
+- Rainy/Moody: low valence (0.4), low-medium energy (0.5), medium tempo (100), genres: indie, soul, blues, acoustic, ambient
+
+IMPORTANT: Only use these Spotify seed genres (no others):
+acoustic, ambient, blues, chill, classical, club, country, dance, deep-house, disco, edm, electro, electronic, folk, funk, gospel, guitar, happy, hip-hop, house, indie, indie-pop, jazz, latin, lo-fi, metal, new-release, opera, pop, progressive-house, punk, r-n-b, reggae, reggaeton, rock, romance, sad, singer-songwriter, soul, soundtrack, study, synth-pop, techno, trance, trap, uk-garage, world-music
+
+Choose exactly 3 genres from this list based on the mood.`,
       responseMimeType: "application/json",
       responseSchema: {
         type: Type.OBJECT,
